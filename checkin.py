@@ -964,7 +964,7 @@ class CheckIn:
             headers["Referer"] = self.provider_config.get_login_url()
             headers["Origin"] = self.provider_config.origin
 
-            # 检查是否需要手动签到
+                        # 检查是否需要手动签到
             if self.provider_config.needs_manual_check_in():
                 # 如果配置了签到状态查询，先检查是否已签到
                 check_in_status_func = self.provider_config.get_check_in_status_func()
@@ -977,6 +977,13 @@ class CheckIn:
                     )
                     if checked_in_today:
                         print(f"ℹ️ {self.account_name}: Already checked in today, skipping check-in")
+                        # 获取用户信息并返回，标记 already_checked_in = True
+                        user_info = await self.get_user_info(session, headers)
+                        if user_info and user_info.get("success"):
+                            user_info["already_checked_in"] = True
+                            return True, user_info
+                        else:
+                            return True, {"success": True, "already_checked_in": True, "display": "Already checked in today"}
                     else:
                         # 未签到，执行签到
                         check_in_result = self.execute_check_in(session, headers, api_user)
