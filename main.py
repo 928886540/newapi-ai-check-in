@@ -43,7 +43,7 @@ async def main():
     if not app_config.accounts:
         print("❌ Unable to load account configuration, program exits")
         return 1
-    
+
     print(f"⚙️ Found {len(app_config.accounts)} account(s)")
 
     last_balance_hash = load_balance_hash(BALANCE_HASH_FILE)
@@ -53,7 +53,7 @@ async def main():
     notification_content = []
     current_balances = {}
     need_notify = False
-    account_status_list = []  # <-- 新增：用于存储每个账号的简要状态
+    account_status_list = []
 
     for i, account_config in enumerate(app_config.accounts):
         account_key = f"account_{i + 1}"
@@ -81,12 +81,10 @@ async def main():
             account_success = False
             successful_methods = []
             failed_methods = []
+            already_checked_in = False
 
             this_account_balances = {}
             account_result = f"📣 {account_name} Summary:\n"
-            # 新增：记录本次操作的具体动作（签到/跳过/失败）
-            action_desc = ""
-
             for auth_method, success, user_info in results:
                 status = "✅ SUCCESS" if success else "❌ FAILED"
                 account_result += f"  {status} with {auth_method} authentication\n"
@@ -104,16 +102,13 @@ async def main():
                         "used": current_used,
                         "bonus": current_bonus,
                     }
-                    # 尝试从 user_info 中获取是否已签到的信息（如果存在）
+                    # 检查是否今日已签到
                     if user_info.get("already_checked_in"):
-                        action_desc = "⏭️ 今日已签到，跳过"
-                    else:
-                        action_desc = "✅ 签到成功"
+                        already_checked_in = True
                 else:
                     failed_methods.append(auth_method)
                     error_msg = user_info.get("error", "Unknown error") if user_info else "Unknown error"
                     account_result += f"    🔺 {str(error_msg)}\n"
-                    action_desc = "❌ 签到失败"
 
             if account_success:
                 current_balances[account_key] = this_account_balances
@@ -135,11 +130,12 @@ async def main():
 
             notification_content.append(account_result)
 
-            # 记录简要状态（用于最后汇总）
-            if action_desc:
-                account_status_list.append((account_name, action_desc))
-            elif account_success:
-                account_status_list.append((account_name, "✅ 签到成功"))
+            # 记录状态
+            if account_success:
+                if already_checked_in:
+                    account_status_list.append((account_name, "⏭️ 今日已签到，跳过"))
+                else:
+                    account_status_list.append((account_name, "✅ 签到成功"))
             else:
                 account_status_list.append((account_name, "❌ 签到失败"))
 
@@ -189,13 +185,15 @@ async def main():
     else:
         print("ℹ️ All accounts successful and no balance changes detected, notification skipped")
 
-    # ========== 新增：打印简洁汇总 ==========
-    print("\n" + "="*50)
-    print("📋 签到结果速览:")
-    for name, status in account_status_list:
-        print(f"  {name}: {status}")
-    print("="*50)
-    # =====================================
+    # 打印简洁汇总（对齐版）
+    if account_status_list:
+        max_len = max(len(name) for name, _ in account_status_list)
+        print("\n" + "=" * 60)
+        print("📋 签到结果速览:")
+        print("-" * 60)
+        for name, status in account_status_list:
+            print(f"  {name:<{max_len}}  →  {status}")
+        print("=" * 60)
 
     sys.exit(0 if success_count > 0 else 1)
 
