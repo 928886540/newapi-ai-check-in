@@ -1,4 +1,5 @@
 name: newapi.ai 自动签到
+
 on:
   schedule:
     - cron: '1 0 * * *'
@@ -170,5 +171,14 @@ jobs:
     - name: 执行结果
       if: always()
       run: |
-        echo "签到任务执行完成"
-        echo "时间: $(Get-Date)"
+        echo "✅ 签到任务执行完成"
+        echo "🕓 时间: $(Get-Date)"
+        echo ""
+        if (Test-Path "result_summary.txt") {
+          echo "📋 签到结果速览:"
+          echo "----------------------------------------"
+          Get-Content result_summary.txt
+          echo "----------------------------------------"
+        } else {
+          echo "⚠️ 未找到签到结果文件，请查看上方「执行签到」步骤的详细日志"
+        }
