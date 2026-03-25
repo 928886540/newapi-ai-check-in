@@ -21,7 +21,6 @@ BALANCE_HASH_FILE = "balance_hash.txt"
 
 def generate_balance_hash(balances: dict) -> str:
     """生成余额数据的hash"""
-    # 将包含 quota 和 used 的结构转换为 {account_name: [quota]} 格式用于 hash 计算
     simple_balances = {}
     if balances:
         for account_key, account_balances in balances.items():
@@ -35,34 +34,26 @@ def generate_balance_hash(balances: dict) -> str:
 
 
 async def main():
-    """运行签到流程
-
-    Returns:
-            退出码: 0 表示至少有一个账号成功, 1 表示全部失败
-    """
-
     print("🚀 newapi.ai multi-account auto check-in script started (using Camoufox)")
     print(f'🕒 Execution time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
     app_config = AppConfig.load_from_env()
     print(f"⚙️ Loaded {len(app_config.providers)} provider(s)")
 
-    # 检查账号配置
     if not app_config.accounts:
         print("❌ Unable to load account configuration, program exits")
         return 1
-    
+
     print(f"⚙️ Found {len(app_config.accounts)} account(s)")
 
-    # 加载余额hash
     last_balance_hash = load_balance_hash(BALANCE_HASH_FILE)
 
-    # 为每个账号执行签到
     success_count = 0
     total_count = 0
     notification_content = []
     current_balances = {}
-    need_notify = False  # 是否需要发送通知
+    need_notify = False
+    account_status_list = []
 
     for i, account_config in enumerate(app_config.accounts):
         account_key = f"account_{i + 1}"
@@ -78,6 +69,7 @@ async def main():
                 notification_content.append(
                     f"[FAIL] {account_name}: Provider '{account_config.provider}' configuration not found"
                 )
+                account_status_list.append((account_name, "❌ 配置缺失"))
                 continue
 
             print(f"🌀 Processing {account_name} using provider '{account_config.provider}'")
@@ -86,13 +78,12 @@ async def main():
 
             total_count += len(results)
 
-            # 处理多个认证方式的结果
             account_success = False
             successful_methods = []
             failed_methods = []
+            already_checked_in = False
 
             this_account_balances = {}
-            # 构建详细的结果报告
             account_result = f"📣 {account_name} Summary:\n"
             for auth_method, success, user_info in results:
                 status = "✅ SUCCESS" if success else "❌ FAILED"
@@ -103,7 +94,6 @@ async def main():
                     success_count += 1
                     successful_methods.append(auth_method)
                     account_result += f"    💰 {user_info['display']}\n"
-                    # 记录余额信息
                     current_quota = user_info["quota"]
                     current_used = user_info["used_quota"]
                     current_bonus = user_info["bonus_quota"]
@@ -112,6 +102,8 @@ async def main():
                         "used": current_used,
                         "bonus": current_bonus,
                     }
+                    if user_info.get("already_checked_in"):
+                        already_checked_in = True
                 else:
                     failed_methods.append(auth_method)
                     error_msg = user_info.get("error", "Unknown error") if user_info else "Unknown error"
@@ -120,17 +112,14 @@ async def main():
             if account_success:
                 current_balances[account_key] = this_account_balances
 
-            # 如果所有认证方式都失败，需要通知
             if not account_success and results:
                 need_notify = True
                 print(f"🔔 {account_name} all authentication methods failed, will send notification")
 
-            # 如果有失败的认证方式，也通知
             if failed_methods and successful_methods:
                 need_notify = True
                 print(f"🔔 {account_name} has some failed authentication methods, will send notification")
 
-            # 添加统计信息
             success_count_methods = len(successful_methods)
             failed_count_methods = len(failed_methods)
 
@@ -140,32 +129,36 @@ async def main():
 
             notification_content.append(account_result)
 
+            if account_success:
+                if already_checked_in:
+                    account_status_list.append((account_name, "⏭️ 今日已签到，跳过"))
+                else:
+                    account_status_list.append((account_name, "✅ 签到成功"))
+            else:
+                account_status_list.append((account_name, "❌ 签到失败"))
+
         except Exception as e:
             print(f"❌ {account_name} processing exception: {e}")
-            need_notify = True  # 异常也需要通知
+            need_notify = True
             notification_content.append(f"❌ {account_name} Exception: {str(e)[:100]}...")
+            account_status_list.append((account_name, f"❌ 异常: {str(e)[:50]}"))
 
-    # 检查余额变化
     current_balance_hash = generate_balance_hash(current_balances) if current_balances else None
     print(f"\n\nℹ️ Current balance hash: {current_balance_hash}, Last balance hash: {last_balance_hash}")
     if current_balance_hash:
         if last_balance_hash is None:
-            # 首次运行
             need_notify = True
             print("🔔 First run detected, will send notification with current balances")
         elif current_balance_hash != last_balance_hash:
-            # 余额有变化
             need_notify = True
             print("🔔 Balance changes detected, will send notification")
         else:
             print("ℹ️ No balance changes detected")
 
-    # 保存当前余额hash
     if current_balance_hash:
         save_balance_hash(BALANCE_HASH_FILE, current_balance_hash)
 
     if need_notify and notification_content:
-        # 构建通知内容
         summary = [
             "-------------------------------",
             "📢 Check-in result statistics:",
@@ -190,12 +183,31 @@ async def main():
     else:
         print("ℹ️ All accounts successful and no balance changes detected, notification skipped")
 
-    # 设置退出码
+    # ========== 打印简洁汇总（对齐版）并保存到文件 ==========
+    if account_status_list:
+        max_len = max(len(name) for name, _ in account_status_list)
+        summary_lines = []
+        summary_lines.append("")
+        summary_lines.append("=" * 60)
+        summary_lines.append("📋 签到结果速览:")
+        summary_lines.append("-" * 60)
+        for name, status in account_status_list:
+            line = f"  {name:<{max_len}}  →  {status}"
+            summary_lines.append(line)
+            print(line)
+        summary_lines.append("=" * 60)
+        # 打印完整汇总（保持原有输出）
+        print("\n".join(summary_lines))
+        
+        # 保存到文件，供最后一步读取
+        with open("result_summary.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(summary_lines))
+    # ====================================================
+
     sys.exit(0 if success_count > 0 else 1)
 
 
 def run_main():
-    """运行主函数的包装函数"""
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
