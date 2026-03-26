@@ -208,7 +208,7 @@ async def main():
             # 查找该账号的余额
             balance_info = account_balance_map.get(name, {})
             balance_val = balance_info.get("quota", 0)
-            balance_str = f"💰 ${balance_val:.2f}" if balance_val > 0 else ""
+            balance_str = f"💰 {balance_val:.2f}" if balance_val > 0 else ""
             summary_lines.append(f"  {name:<28}  →  {status:<12}  {balance_str}")
         
         summary_lines.append("-" * 70)
