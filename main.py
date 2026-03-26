@@ -188,7 +188,7 @@ async def main():
     else:
         print("ℹ️ All accounts successful and no balance changes detected, notification skipped")
 
-    # ========== 生成汇总并传递给 GitHub Actions ==========
+        # ========== 生成汇总并传递给 GitHub Actions ==========
     if account_status_list:
         # 统计各状态数量
         total = len(account_status_list)
@@ -215,11 +215,7 @@ async def main():
         summary_lines.append(f"📊 总计: {total} 个账号  |  ✅ 成功: {success_cnt}  |  ⏭️ 跳过: {skip_cnt}  |  ❌ 失败: {fail_cnt}")
         summary_lines.append("=" * 70)
         
-        # 打印到控制台
-        for line in summary_lines:
-            print(line)
-        
-        # 写入 GitHub Actions 输出
+        # 写入 GitHub Actions 输出（不再打印到控制台）
         github_output = os.getenv("GITHUB_OUTPUT")
         if github_output:
             with open(github_output, "a", encoding="utf-8") as f:
