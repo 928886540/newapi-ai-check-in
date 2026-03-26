@@ -175,11 +175,12 @@ jobs:
         echo "✅ 签到任务执行完成"
         echo "🕓 时间: $(Get-Date)"
         echo ""
-        if ("${{ steps.checkin.outputs.summary }}" -ne "") {
-          echo "📋 完整签到结果"
-          echo "----------------------------------------"
-          echo "${{ steps.checkin.outputs.summary }}"
-          echo "----------------------------------------"
+        $summary = "${{ steps.checkin.outputs.summary }}"
+        if ($summary -ne "") {
+          Write-Output "📋 完整签到结果"
+          Write-Output "----------------------------------------"
+          Write-Output $summary
+          Write-Output "----------------------------------------"
         } else {
-          echo "⚠️ 未找到签到结果，请查看上方「执行签到」步骤的详细日志"
+          Write-Output "⚠️ 未找到签到结果，请查看上方「执行签到」步骤的详细日志"
         }
